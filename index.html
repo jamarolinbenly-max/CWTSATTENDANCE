@@ -110,7 +110,7 @@
     // ⬇️⬇️⬇️ PASTE YOUR APPS SCRIPT WEB APP URL HERE ⬇️⬇️⬇️
     // Deploy your Apps Script project as a Web App (Deploy > New deployment > Web app),
     // then paste the URL it gives you (ending in /exec) below.
-    const APPS_SCRIPT_URL = "https://script.google.com/a/macros/jrmsu.edu.ph/s/AKfycbwwZVgsv0JQWXzm8FpAmFWl0PL5eW0-OlnUeWc5pYlaEQm05Q4QZ0b4k5mPwWCEFjVw/exec";
+    const APPS_SCRIPT_URL = "PASTE_YOUR_WEB_APP_URL_HERE";
     // ⬆️⬆️⬆️ ------------------------------------------ ⬆️⬆️⬆️
 
     let lastScanned = '';
@@ -172,11 +172,11 @@
         .then(function (res) { return res.json(); })
         .then(function (result) {
           if (result.status === 'already') {
-            showMessage(result.name + ' is already marked Present today.', 'already');
+            showMessage(result.name + ' already Present today (Batch ' + result.batch + ').', 'already');
           } else if (result.status === 'error') {
             showMessage('Error: ' + result.message, 'error');
           } else {
-            showMessage('✅ ' + result.name + ' marked Present (' + result.date + ')', 'success');
+            showMessage('✅ ' + result.name + ' — Batch ' + result.batch + ' (' + result.date + ')', 'success');
           }
         })
         .catch(function (err) {
