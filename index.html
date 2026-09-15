@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Attendance Scanner</title>
+<script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+<style>
+  :root {
+    --navy: #0a1f44;
+    --gold: #f0c419;
+    --gold-dark: #d4af37;
+  }
+
+  * { box-sizing: border-box; }
+
+  html, body {
+    margin: 0;
+    padding: 0;
+    min-height: 100%;
+    background: var(--navy);
+    font-family: 'Segoe UI', Arial, sans-serif;
+    display: flex;
+    justify-content: center;
+    align-items: flex-start;
+  }
+
+  #card {
+    background: white;
+    border-radius: 14px;
+    border-top: 6px solid var(--gold);
+    box-shadow: 0 10px 30px rgba(0,0,0,0.35);
+    margin: 24px 12px;
+    padding: 30px 26px 24px 26px;
+    width: 100%;
+    max-width: 480px;
+  }
+
+  h1 {
+    color: var(--navy);
+    font-size: 26px;
+    font-weight: 800;
+    text-align: center;
+    margin: 0 0 8px 0;
+  }
+
+  .subtitle {
+    color: var(--navy);
+    font-size: 14px;
+    text-align: center;
+    margin: 0 0 20px 0;
+    opacity: 0.8;
+  }
+
+  #qr-reader {
+    width: 100%;
+    border-radius: 10px;
+    overflow: hidden;
+    border: 2px solid var(--navy);
+  }
+
+  #hint {
+    text-align: center;
+    font-size: 13px;
+    color: var(--navy);
+    opacity: 0.7;
+    margin-top: 12px;
+  }
+
+  #message {
+    margin-top: 16px;
+    padding: 14px 16px;
+    border-radius: 8px;
+    font-size: 16px;
+    font-weight: 700;
+    display: none;
+    text-align: center;
+  }
+
+  .success {
+    background: var(--navy);
+    color: var(--gold);
+  }
+
+  .already {
+    background: #fff8e1;
+    color: #8a6d00;
+    border: 1px solid var(--gold-dark);
+  }
+
+  .error {
+    background: #fdecea;
+    color: #b3261e;
+    border: 1px solid #b3261e;
+  }
+</style>
+</head>
+<body>
+
+  <div id="card">
+    <h1>📷 Attendance Scanner</h1>
+    <p class="subtitle">Point the camera at a student's QR code.</p>
+
+    <div id="qr-reader"></div>
+    <p id="hint">Waiting for camera...</p>
+    <div id="message"></div>
+  </div>
+
+  <script>
+    // ⬇️⬇️⬇️ PASTE YOUR APPS SCRIPT WEB APP URL HERE ⬇️⬇️⬇️
+    // Deploy your Apps Script project as a Web App (Deploy > New deployment > Web app),
+    // then paste the URL it gives you (ending in /exec) below.
+    const APPS_SCRIPT_URL = "PASTE_YOUR_WEB_APP_URL_HERE";
+    // ⬆️⬆️⬆️ ------------------------------------------ ⬆️⬆️⬆️
+
+    let lastScanned = '';
+    let lastScanTime = 0;
+    let html5QrCode = null;
+
+    function startScanner() {
+      html5QrCode = new Html5Qrcode("qr-reader");
+
+      Html5Qrcode.getCameras().then(function (devices) {
+        if (!devices || devices.length === 0) {
+          setHint('No camera detected on this device.');
+          return;
+        }
+
+        // Prefer a labeled back/rear camera (phones); otherwise use the first available.
+        let camera = devices.find(function (d) {
+          return /back|rear|environment/i.test(d.label);
+        });
+        const cameraId = camera ? camera.id : devices[0].id;
+
+        html5QrCode.start(
+          cameraId,
+          { fps: 10, qrbox: 230 },
+          onScanSuccess,
+          function () { /* ignore per-frame "no QR found" noise */ }
+        ).then(function () {
+          setHint("Point the camera at a student's QR code.");
+        }).catch(function (err) {
+          setHint('Camera error: ' + err);
+        });
+      }).catch(function (err) {
+        setHint('Could not access camera: ' + err + '. Make sure you allowed camera permission for this page.');
+      });
+    }
+
+    function onScanSuccess(decodedText) {
+      const now = Date.now();
+      // avoid re-triggering the same code repeatedly within 3 seconds
+      if (decodedText === lastScanned && now - lastScanTime < 3000) return;
+      lastScanned = decodedText;
+      lastScanTime = now;
+      sendAttendance(decodedText.trim());
+    }
+
+    function sendAttendance(name) {
+      if (APPS_SCRIPT_URL.indexOf('PASTE_YOUR') === 0) {
+        showMessage('⚠️ Set APPS_SCRIPT_URL at the top of this file first.', 'error');
+        return;
+      }
+
+      showMessage('Marking ' + name + '...', 'success');
+
+      fetch(APPS_SCRIPT_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+        body: JSON.stringify({ name: name })
+      })
+        .then(function (res) { return res.json(); })
+        .then(function (result) {
+          if (result.status === 'already') {
+            showMessage(result.name + ' is already marked Present today.', 'already');
+          } else if (result.status === 'error') {
+            showMessage('Error: ' + result.message, 'error');
+          } else {
+            showMessage('✅ ' + result.name + ' marked Present (' + result.date + ')', 'success');
+          }
+        })
+        .catch(function (err) {
+          showMessage('Could not reach the attendance sheet: ' + err, 'error');
+        });
+    }
+
+    function showMessage(text, type) {
+      const msg = document.getElementById('message');
+      msg.textContent = text;
+      msg.className = type;
+      msg.style.display = 'block';
+      setTimeout(function () {
+        msg.style.display = 'none';
+      }, 3500);
+    }
+
+    function setHint(text) {
+      document.getElementById('hint').textContent = text;
+    }
+
+    startScanner();
+  </script>
+
+</body>
+</html>
