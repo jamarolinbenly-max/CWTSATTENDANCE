@@ -48,8 +48,37 @@
     color: var(--navy);
     font-size: 14px;
     text-align: center;
-    margin: 0 0 20px 0;
+    margin: 0 0 18px 0;
     opacity: 0.8;
+  }
+
+  #modeRow {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 18px;
+  }
+
+  .mode-btn {
+    flex: 1;
+    padding: 13px;
+    font-size: 15px;
+    font-weight: 700;
+    border: 2px solid var(--navy);
+    background: white;
+    color: var(--navy);
+    border-radius: 8px;
+    cursor: pointer;
+  }
+
+  .mode-btn.active-mode {
+    background: var(--navy);
+    color: var(--gold);
+  }
+
+  .mode-btn.mode-out.active-mode {
+    background: var(--gold);
+    color: var(--navy);
+    border-color: var(--gold-dark);
   }
 
   #qr-reader {
@@ -98,8 +127,13 @@
 <body>
 
   <div id="card">
-    <h1>Attendance Scanner</h1>
-    <p class="subtitle">Point the camera at a student's QR code.</p>
+    <h1>📷 Attendance Scanner</h1>
+    <p class="subtitle">Choose IN or OUT, then scan a student's QR code.</p>
+
+    <div id="modeRow">
+      <button class="mode-btn active-mode" id="modeInBtn" onclick="setMode('in')">✅ Check IN</button>
+      <button class="mode-btn mode-out" id="modeOutBtn" onclick="setMode('out')">👋 Check OUT</button>
+    </div>
 
     <div id="qr-reader"></div>
     <p id="hint">Waiting for camera...</p>
@@ -110,12 +144,19 @@
     // ⬇️⬇️⬇️ PASTE YOUR APPS SCRIPT WEB APP URL HERE ⬇️⬇️⬇️
     // Deploy your Apps Script project as a Web App (Deploy > New deployment > Web app),
     // then paste the URL it gives you (ending in /exec) below.
-    const APPS_SCRIPT_URL = "https://script.google.com/a/macros/jrmsu.edu.ph/s/AKfycbzxZuKcarA4r9sO1kVokDsLj4ZYk1iG4vGmHpa1BGCi1Bk-nGb-JC6lM4NyuDPB4WfN/exec";
+    const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbx1mHdN5vW-pPogiNtxajzSyrD_CVf0r2FbV0F7JjdQvKJOIMRi8olhxvQa80UioAlW/exec";
     // ⬆️⬆️⬆️ ------------------------------------------ ⬆️⬆️⬆️
 
     let lastScanned = '';
     let lastScanTime = 0;
     let html5QrCode = null;
+    let currentMode = 'in';
+
+    function setMode(mode) {
+      currentMode = mode;
+      document.getElementById('modeInBtn').classList.toggle('active-mode', mode === 'in');
+      document.getElementById('modeOutBtn').classList.toggle('active-mode', mode === 'out');
+    }
 
     function startScanner() {
       html5QrCode = new Html5Qrcode("qr-reader");
@@ -167,16 +208,22 @@
       fetch(APPS_SCRIPT_URL, {
         method: 'POST',
         headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-        body: JSON.stringify({ name: name })
+        body: JSON.stringify({ name: name, mode: currentMode })
       })
         .then(function (res) { return res.json(); })
         .then(function (result) {
-          if (result.status === 'already') {
-            showMessage(result.name + ' already Present today (Batch ' + result.batch + ').', 'already');
+          if (result.status === 'checked_in') {
+            showMessage('✅ ' + result.name + ' checked IN at ' + result.time + ' — Batch ' + result.batch, 'success');
+          } else if (result.status === 'checked_out') {
+            showMessage('👋 ' + result.name + ' checked OUT at ' + result.time + ' — Batch ' + result.batch, 'success');
+          } else if (result.status === 'already_in') {
+            showMessage(result.name + ' already checked IN at ' + result.inTime + ' today.', 'already');
+          } else if (result.status === 'not_checked_in') {
+            showMessage(result.name + " hasn't checked IN yet today.", 'already');
+          } else if (result.status === 'already_out') {
+            showMessage(result.name + ' already IN (' + result.inTime + ') & OUT (' + result.outTime + ') today.', 'already');
           } else if (result.status === 'error') {
             showMessage('Error: ' + result.message, 'error');
-          } else {
-            showMessage('✅ ' + result.name + ' — Batch ' + result.batch + ' (' + result.date + ')', 'success');
           }
         })
         .catch(function (err) {
